@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Particle Animation - Fixed</title>
+
+<!-- Google Fonts -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Playfair+Display:wght@400..900&family=JetBrains+Mono:wght@100..800&family=Lobster&display=swap" rel="stylesheet">
+
+<!-- Libraries -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+
+<style>
+    :root {
+        --bg: #000000;
+        --glass: rgba(20, 20, 22, 0.85);
+        --border: rgba(255, 255, 255, 0.15);
+        --text-secondary: #86868b;
+        --accent: #0a84ff;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; user-select: none; outline: none; }
+
+    body {
+        background-color: var(--bg);
+        overflow: hidden;
+        font-family: 'Inter', sans-serif;
+        color: white;
+    }
+
+    #canvas-container { position: fixed; inset: 0; z-index: 0; }
+
+    .ui-layer {
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        pointer-events: none;
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+    }
+
+    .header {
+        pointer-events: auto;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        transition: opacity 0.3s ease;
+    }
+
+    .title-block h1 {
+        font-size: 14px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-secondary);
+    }
+
+    .top-controls { display: flex; gap: 12px; }
+
+    .glass-btn {
+        width: 44px; height: 44px;
+        border-radius: 50%;
+        background: rgba(255,255,255,0.08);
+        backdrop-filter: blur(20px);
+        border: 1px solid var(--border);
+        color: white;
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    .glass-btn:hover { background: rgba(255,255,255,0.2); transform: scale(1.05); }
+    .glass-btn.active { background: white; color: black; }
+
+    .bottom-controls {
+        pointer-events: auto;
+        align-self: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        width: 100%;
+        max-width: 600px;
+        transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        transform-origin: bottom center;
+    }
+
+    .dock {
+        background: var(--glass);
+        backdrop-filter: blur(25px);
+        border: 1px solid var(--border);
+        padding: 5px;
+        border-radius: 100px;
+        display: flex; gap: 4px;
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+
+    .dock-btn {
+        padding: 10px 20px;
+        background: transparent;
+        border: none;
+        color: var(--text-secondary);
+        font-size: 13px; font-weight: 600;
+        border-radius: 100px;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    .dock-btn:hover { color: white; }
+    .dock-btn.active { background: rgba(255,255,255,0.15); color: white; }
+
+    .input-capsule {
+        width: 100%;
+        background: var(--glass);
+        backdrop-filter: blur(25px);
+        border: 1px solid var(--border);
+        height: 56px;
+        border-radius: 28px;
+        display: flex; padding: 6px;
+    }
+
+    input[type="text"] {
+        flex: 1; background: transparent; border: none; padding: 0 24px;
+        color: white; font-size: 16px; font-weight: 500;
+    }
+
+    .action-btn {
+        padding: 0 28px; background: white; color: black; border: none;
+        border-radius: 22px; font-weight: 700; font-size: 14px; cursor: pointer;
+        transition: transform 0.1s;
+    }
+    .action-btn:active { transform: scale(0.95); }
+
+    .settings-panel {
+        position: absolute;
+        top: 80px; right: 24px;
+        width: 340px;
+        background: rgba(20, 20, 22, 0.95);
+        backdrop-filter: blur(40px);
+        border: 1px solid var(--border);
+        border-radius: 24px;
+        padding: 20px;
+        opacity: 0; pointer-events: none;
+        transform: translateY(-10px) scale(0.95);
+        transition: all 0.3s ease;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+    }
+    .settings-panel.open { opacity: 1; pointer-events: auto; transform: translateY(0) scale(1); }
+
+    .panel-row { margin-bottom: 16px; }
+    .panel-header { 
+        font-size: 11px; text-transform: uppercase; color: var(--text-secondary); 
+        font-weight: 700; margin-bottom: 8px; display: flex; justify-content: space-between;
+    }
+    .header-sub { font-size: 9px; color: var(--accent); opacity: 0.8; letter-spacing: 0; }
+
+    .slider-wrapper { display: flex; align-items: center; gap: 10px; }
+    .slider-val { font-size: 13px; font-variant-numeric: tabular-nums; width: 40px; text-align: right; color: white;}
+
+    input[type="range"] {
+        flex: 1; -webkit-appearance: none; height: 4px; background: rgba(255,255,255,0.15); border-radius: 2px;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none; width: 18px; height: 18px; background: white; border-radius: 50%; cursor: pointer;
+    }
+
+    select.custom-select {
+        width: 100%; appearance: none; -webkit-appearance: none;
+        background: rgba(255,255,255,0.05); border: 1px solid var(--border);
+        color: white; padding: 10px 12px; border-radius: 12px;
+        font-family: 'Inter', sans-serif; font-size: 13px; cursor: pointer; outline: none;
+        background-image: url("data:image/svg+xml,%3Csvg width='10' height='6' viewBox='0 0 10 6' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1L5 5L9 1' stroke='white' stroke-opacity='0.5' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+        background-repeat: no-repeat; background-position: right 12px center;
+    }
+    select.custom-select option { background: #141416; color: white; }
+
+    input[type="file"]::file-selector-button {
+        margin-right: 10px; border: none; background: var(--accent);
+        padding: 8px 12px; border-radius: 8px; color: #fff; cursor: pointer;
+        font-size: 11px; font-weight: 700; text-transform: uppercase;
+    }
+    input[type="file"] { font-size: 12px; color: #888; }
+
+    .color-wrapper {
+        display: flex; align-items: center; justify-content: space-between;
+        background: rgba(255,255,255,0.05); padding: 8px 12px; border-radius: 12px;
+    }
+    input[type="color"] {
+        -webkit-appearance: none; border: none; width: 30px; height: 30px; background: none; cursor: pointer;
+    }
+
+    body.fs-mode .header { opacity: 0; transform: translateY(-20px); pointer-events: none; }
+    body.fs-mode .settings-panel { opacity: 0 !important; pointer-events: none !important; }
+    body.fs-mode .bottom-controls { transform: scale(0.75) translateY(15px); }
+
+</style>
+</head>
+<body>
+
+<div id="canvas-container"></div>
+
+<div class="ui-layer">
+    <div class="header">
+        <div class="title-block"><h1>Particle Engine</h1></div>
+        <div class="top-controls">
+            <button class="glass-btn" id="settings-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1.09 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></button>
+            <button class="glass-btn" id="fullscreen-btn"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"></path></svg></button>
+        </div>
+    </div>
+
+    <div class="settings-panel" id="settings-panel">
+
+        <div class="panel-row">
+            <div class="panel-header">Upload Custom Font</div>
+            <input type="file" id="font-upload" accept=".ttf,.otf,.woff" style="width:100%">
+        </div>
+
+        <div class="panel-row">
+            <div class="panel-header">Select Typeface</div>
+            <select id="font-select" class="custom-select">
+                <!-- Default options -->
+            </select>
+        </div>
+
+        <div class="panel-row">
+            <div class="panel-header">Text Font Size</div>
+            <div class="slider-wrapper">
+                <input type="range" id="fontSize-slider" min="50" max="250" step="5" value="120">
+                <span class="slider-val" id="fontSize-val">120</span>
+            </div>
+        </div>
+
+        <div class="panel-row">
+            <div class="panel-header">Text Density</div>
+            <div class="slider-wrapper">
+                <input type="range" id="density-slider" min="1" max="10" step="1" value="6">
+                <span class="slider-val" id="density-val">6</span>
+            </div>
+        </div>
+
+        <div class="panel-row">
+            <div class="panel-header">Text Boldness</div>
+            <div class="slider-wrapper">
+                <input type="range" id="weight-slider" min="100" max="900" step="100" value="700">
+                <span class="slider-val" id="weight-val">700</span>
+            </div>
+        </div>
+
+        <div class="panel-row">
+            <div class="panel-header">Text Particle Size</div>
+            <div class="slider-wrapper">
+                <input type="range" id="textParticle-slider" min="0.1" max="3.0" step="0.1" value="1.2">
+                <span class="slider-val" id="textParticle-val">1.2</span>
+            </div>
+        </div>
+
+        <!-- MISSING DUST SLIDER ADDED HERE -->
+        <div class="panel-row">
+            <div class="panel-header">Dust Particle Size</div>
+            <div class="slider-wrapper">
+                <input type="range" id="dustParticle-slider" min="0.1" max="2.0" step="0.1" value="0.3">
+                <span class="slider-val" id="dustParticle-val">0.3</span>
+            </div>
+        </div>
+
+        <div class="panel-row">
+            <div class="panel-header">Shape Particle Size</div>
+            <div class="slider-wrapper">
+                <input type="range" id="shapeParticle-slider" min="0.1" max="1.5" step="0.1" value="0.6">
+                <span class="slider-val" id="shapeParticle-val">0.6</span>
+            </div>
+        </div>
+
+        <div class="panel-row">
+            <div class="panel-header">Color</div>
+            <div class="color-wrapper">
+                <span style="font-size:13px; color:#aaa">Pick Color</span>
+                <input type="color" id="color-picker" value="#0a84ff">
+            </div>
+        </div>
+    </div>
+
+    <div class="bottom-controls">
+        <div class="dock">
+            <button class="dock-btn active" data-shape="sphere">Sphere</button>
+            <button class="dock-btn" data-shape="cube">Cube</button>
+            <button class="dock-btn" data-shape="dna">DNA</button>
+            <button class="dock-btn" data-shape="heart">Heart</button>
+            <button class="dock-btn" data-shape="galaxy">Galaxy</button>
+        </div>
+        <div class="input-capsule">
+            <input type="text" id="text-input" placeholder="Type message..." maxlength="18">
+            <button class="action-btn" id="morph-btn">Morph</button>
+        </div>
+    </div>
+</div>
+
+<script>
+
+const fontList = [
+    { name: 'Inter', type: 'google' },
+    { name: 'Playfair Display', type: 'google' },
+    { name: 'JetBrains Mono', type: 'google' },
+    { name: 'Lobster', type: 'google' }
+];
+
+const config = {
+    maxParticles: 40000,
+    count: 30000,
+    sizeShape: 0.6, 
+    sizeText: 1.2,  
+    sizeDust: 0.3,  
+    fontSize: 120,
+    weight: 700,
+    font: 'Inter',
+    textSampleStep: 5,
+    color: '#0a84ff',
+    isAuto: true
+};
+
+let scene, camera, renderer, particles;
+let currentShape = 'sphere';
+let currentText = '';
+let morphTween;
+
+const vertexShader = `
+    attribute float size;
+    attribute vec3 customColor;
+    varying vec3 vColor;
+    void main() {
+        vColor = customColor;
+        vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+        gl_PointSize = size * (300.0 / -mvPosition.z);
+        gl_Position = projectionMatrix * mvPosition;
+    }
+`;
+
+const fragmentShader = `
+    uniform vec3 color;
+    uniform sampler2D pointTexture;
+    varying vec3 vColor;
+    void main() {
+        gl_FragColor = vec4(color * vColor, 1.0);
+        gl_FragColor = gl_FragColor * texture2D(pointTexture, gl_PointCoord);
+        if (gl_FragColor.a < 0.1) discard;
+    }
+`;
+
+function init() {
+    scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x000000, 0.025);
+
+    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+    camera.position.z = 35;
+
+    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    document.getElementById('canvas-container').appendChild(renderer.domElement);
+
+    createParticleSystem();
+    setupUI();
+    animate();
+    startAutoCycle();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+}
+
+function createParticleSystem() {
+    const geometry = new THREE.BufferGeometry();
+    const positions = new Float32Array(config.maxParticles * 3);
+    const colors = new Float32Array(config.maxParticles * 3);
+    const sizes = new Float32Array(config.maxParticles); 
+
+    for (let i = 0; i < config.maxParticles; i++) {
+        positions[i*3] = (Math.random()-0.5)*100;
+        positions[i*3+1] = (Math.random()-0.5)*100;
+        positions[i*3+2] = (Math.random()-0.5)*100;
+        colors[i*3] = 1; colors[i*3+1] = 1; colors[i*3+2] = 1;
+        sizes[i] = config.sizeShape;
+    }
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('customColor', new THREE.BufferAttribute(colors, 3));
+    geometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+    const material = new THREE.ShaderMaterial({
+        uniforms: {
+            color: { value: new THREE.Color(0xffffff) },
+            pointTexture: { value: getTexture() }
+        },
+        vertexShader: vertexShader,
+        fragmentShader: fragmentShader,
+        blending: THREE.AdditiveBlending,
+        depthTest: false,
+        transparent: true
+    });
+
+    particles = new THREE.Points(geometry, material);
+    scene.add(particles);
+
+    morphTo('sphere');
+}
+
+function getTexture() {
+    const c = document.createElement('canvas');
+    c.width = 32; c.height = 32;
+    const ctx = c.getContext('2d');
+    const g = ctx.createRadialGradient(16,16,0,16,16,16);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.4, 'rgba(255,255,255,0.8)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,32,32);
+    return new THREE.CanvasTexture(c);
+}
+
+function getTargets(type, text) {
+    const data = { positions: [], sizes: [] };
+    const count = config.count;
+
+    if (type === 'text') {
+        const tPts = getTextPoints(text);
+        for (let i = 0; i < count; i++) {
+            if (i < tPts.length) {
+                data.positions.push(tPts[i]);
+                data.sizes.push(config.sizeText); 
+            } else {
+                data.positions.push({
+                    x: (Math.random()-0.5)*140,
+                    y: (Math.random()-0.5)*80,
+                    z: (Math.random()-0.5)*60 - 10
+                });
+                data.sizes.push(config.sizeDust); 
+            }
+        }
+    } else {
+        for(let i=0; i<count; i++) {
+            let x=0, y=0, z=0;
+            if(type==='sphere') {
+                const phi = Math.acos(-1 + (2*i)/count);
+                const theta = Math.sqrt(count*Math.PI)*phi;
+                const r = 12;
+                x = r*Math.sin(phi)*Math.cos(theta);
+                y = r*Math.sin(phi)*Math.sin(theta);
+                z = r*Math.cos(phi);
+            } 
+            else if(type==='cube') {
+                const s=16; 
+                x=(Math.random()-0.5)*s; y=(Math.random()-0.5)*s; z=(Math.random()-0.5)*s;
+            } 
+            else if(type==='heart') {
+                const t = Math.random()*Math.PI*2;
+                x = 16*Math.pow(Math.sin(t),3); 
+                y = 13*Math.cos(t)-5*Math.cos(2*t)-2*Math.cos(3*t)-Math.cos(4*t); 
+                z = (Math.random()-0.5)*4; 
+                x*=0.8; y*=0.8;
+            } 
+            else if(type==='galaxy') {
+                const ang = i*0.005; 
+                const r = (i/count)*30;
+                x = Math.cos(ang*5)*r + (Math.random()-0.5); 
+                z = Math.sin(ang*5)*r + (Math.random()-0.5); 
+                y = (Math.random()-0.5)*3;
+            }
+            else if(type === 'dna') {
+                const len = 40;
+                const n = i / count; 
+                y = (n * len) - (len/2);
+                const radius = 7;
+                const turns = 3.5;
+                const angle = n * Math.PI * 2 * turns;
+                if(i % 2 === 0) {
+                    x = Math.cos(angle) * radius;
+                    z = Math.sin(angle) * radius;
+                } else {
+                    x = Math.cos(angle + Math.PI) * radius;
+                    z = Math.sin(angle + Math.PI) * radius;
+                }
+                x += (Math.random()-0.5)*0.5;
+                z += (Math.random()-0.5)*0.5;
+                y += (Math.random()-0.5)*0.5;
+            }
+            data.positions.push({x,y,z});
+            data.sizes.push(config.sizeShape); 
+        }
+    }
+    return data;
+}
+
+function getTextPoints(text) {
+    const cvs = document.createElement('canvas');
+    const ctx = cvs.getContext('2d');
+    cvs.width = 2000; cvs.height = 600; 
+
+    ctx.font = `${config.weight} ${config.fontSize}px "${config.font}", sans-serif`;
+    ctx.fillStyle = 'white';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(text, cvs.width/2, cvs.height/2);
+
+    const data = ctx.getImageData(0,0,cvs.width,cvs.height).data;
+    const pts = [];
+    const step = config.textSampleStep; 
+
+    for(let y=0; y<cvs.height; y+=step) {
+        for(let x=0; x<cvs.width; x+=step) {
+            if(data[(y*cvs.width+x)*4+3] > 128) {
+                pts.push({
+                    x: (x-cvs.width/2)*0.14,
+                    y: -(y-cvs.height/2)*0.14,
+                    z: 0
+                });
+            }
+        }
+    }
+    return pts;
+}
+
+function morphTo(type, text='') {
+    if(text) { config.isAuto = false; currentText = text; }
+    currentShape = type;
+
+    const targetData = getTargets(type, text);
+    const pos = particles.geometry.attributes.position.array;
+    const sizeAttr = particles.geometry.attributes.size.array;
+    const col = particles.geometry.attributes.customColor.array;
+
+    const startPos = Float32Array.from(pos);
+    const startSize = Float32Array.from(sizeAttr);
+
+    if(morphTween) morphTween.kill();
+
+    if(type === 'text') {
+        gsap.to(particles.rotation, {x:0, y:0, z:0, duration:1.5, ease:"power3.out"});
+    }
+
+    const hex = new THREE.Color(config.color);
+    const hsl = {}; hex.getHSL(hsl);
+
+    const tweenObj = {t:0};
+
+    morphTween = gsap.to(tweenObj, {
+        t: 1,
+        duration: 2.5,
+        ease: "power4.inOut",
+        onUpdate: () => {
+            const t = tweenObj.t;
+            for(let i=0; i<config.maxParticles; i++) {
+                let tx=0, ty=0, tz=0, ts=0; 
+                if(i < targetData.positions.length) { 
+                    tx=targetData.positions[i].x; 
+                    ty=targetData.positions[i].y; 
+                    tz=targetData.positions[i].z;
+                    ts=targetData.sizes[i];
+                } else {
+                    tx = (Math.random()-0.5)*50;
+                    ty = (Math.random()-0.5)*50;
+                    ts = 0;
+                }
+                const ix = i*3;
+                pos[ix] = startPos[ix] + (tx - startPos[ix])*t;
+                pos[ix+1] = startPos[ix+1] + (ty - startPos[ix+1])*t;
+                pos[ix+2] = startPos[ix+2] + (tz - startPos[ix+2])*t;
+                sizeAttr[i] = startSize[i] + (ts - startSize[i])*t;
+                if(i < targetData.positions.length) {
+                    const l = hsl.l + (Math.random()-0.5)*0.2;
+                    const c = new THREE.Color().setHSL(hsl.h, hsl.s, l);
+                    col[ix] = c.r; col[ix+1] = c.g; col[ix+2] = c.b;
+                }
+            }
+            particles.geometry.attributes.position.needsUpdate = true;
+            particles.geometry.attributes.size.needsUpdate = true;
+            particles.geometry.attributes.customColor.needsUpdate = true;
+        }
+    });
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    const time = Date.now()*0.001;
+    if(currentShape !== 'text') {
+        particles.rotation.y += 0.002; 
+        particles.rotation.x = Math.sin(time*0.5)*0.1;
+    } else {
+        particles.rotation.x = Math.sin(time*0.3)*0.02;
+        particles.rotation.y = Math.cos(time*0.2)*0.02;
+    }
+    renderer.render(scene, camera);
+}
+
+function setupUI() {
+    const textIn = document.getElementById('text-input');
+    const morphBtn = document.getElementById('morph-btn');
+    const fontSelect = document.getElementById('font-select');
+
+    fontList.forEach(f => {
+        const opt = document.createElement('option');
+        opt.value = f.name; opt.text = f.name;
+        fontSelect.appendChild(opt);
+    });
+
+    fontSelect.onchange = (e) => {
+        config.font = e.target.value;
+        if(currentShape === 'text' && currentText) morphTo('text', currentText);
+    };
+
+    document.getElementById('font-upload').onchange = (e) => {
+        const file = e.target.files[0];
+        if(!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+
+            const fontName = "UploadedFont_" + Date.now(); 
+            const font = new FontFace(fontName, ev.target.result);
+
+            font.load().then(f => {
+                document.fonts.add(f);
+
+                const opt = document.createElement('option');
+                opt.value = fontName;
+                opt.text = file.name; 
+                fontSelect.appendChild(opt);
+
+                fontSelect.value = fontName;
+                config.font = fontName;
+
+                if(currentShape === 'text' && currentText) morphTo('text', currentText);
+            }).catch(err => {
+                console.error("Font load failed", err);
+                alert("Error loading font file.");
+            });
+        };
+        reader.readAsArrayBuffer(file);
+    };
+
+    const doMorph = () => {
+        const t = textIn.value;
+        if(t) {
+            document.querySelectorAll('.dock-btn').forEach(b=>b.classList.remove('active'));
+            morphTo('text', t);
+        }
+    };
+    morphBtn.onclick = doMorph;
+    textIn.onkeydown = e => { if(e.key==='Enter') doMorph(); };
+
+    document.querySelectorAll('.dock-btn').forEach(b => {
+        b.onclick = () => {
+            config.isAuto = false;
+            document.querySelectorAll('.dock-btn').forEach(x=>x.classList.remove('active'));
+            b.classList.add('active');
+            morphTo(b.dataset.shape);
+        }
+    });
+
+    document.getElementById('settings-btn').onclick = (e) => {
+        document.getElementById('settings-panel').classList.toggle('open');
+        e.currentTarget.classList.toggle('active');
+    };
+
+    document.getElementById('fullscreen-btn').onclick = () => {
+        if(!document.fullscreenElement) {
+            document.body.requestFullscreen();
+            document.body.classList.add('fs-mode');
+        } else {
+            document.exitFullscreen();
+            document.body.classList.remove('fs-mode');
+        }
+    };
+    document.addEventListener('fullscreenchange', () => {
+        if(!document.fullscreenElement) document.body.classList.remove('fs-mode');
+        else document.body.classList.add('fs-mode');
+    });
+
+    document.getElementById('color-picker').oninput = (e) => {
+        config.color = e.target.value;
+        if(currentShape) {
+            const hex = new THREE.Color(config.color);
+            const hsl = {}; hex.getHSL(hsl);
+            const cols = particles.geometry.attributes.customColor.array;
+            for(let i=0; i<config.maxParticles*3; i+=3) {
+                const l = hsl.l + (Math.random()-0.5)*0.2;
+                const c = new THREE.Color().setHSL(hsl.h, hsl.s, l);
+                cols[i] = c.r; cols[i+1] = c.g; cols[i+2] = c.b;
+            }
+            particles.geometry.attributes.customColor.needsUpdate = true;
+        }
+    };
+
+    const updateMorph = () => { if(currentShape === 'text' && currentText) morphTo('text', currentText); };
+    const updateShape = () => { if(currentShape !== 'text') morphTo(currentShape); };
+
+    document.getElementById('fontSize-slider').oninput = (e) => {
+        config.fontSize = parseInt(e.target.value);
+        document.getElementById('fontSize-val').innerText = config.fontSize;
+        updateMorph();
+    };
+
+    document.getElementById('density-slider').oninput = (e) => {
+        const val = parseInt(e.target.value); 
+        document.getElementById('density-val').innerText = val;
+        config.textSampleStep = 12 - val; 
+        updateMorph();
+    };
+
+    document.getElementById('weight-slider').oninput = (e) => {
+        config.weight = e.target.value;
+        document.getElementById('weight-val').innerText = config.weight;
+        updateMorph();
+    };
+
+    document.getElementById('textParticle-slider').oninput = (e) => {
+        config.sizeText = parseFloat(e.target.value);
+        document.getElementById('textParticle-val').innerText = config.sizeText;
+        updateMorph();
+    };
+
+    document.getElementById('dustParticle-slider').oninput = (e) => {
+        config.sizeDust = parseFloat(e.target.value);
+        document.getElementById('dustParticle-val').innerText = config.sizeDust;
+        updateMorph();
+    };
+
+    document.getElementById('shapeParticle-slider').oninput = (e) => {
+        config.sizeShape = parseFloat(e.target.value);
+        document.getElementById('shapeParticle-val').innerText = config.sizeShape;
+        updateShape();
+    };
+}
+
+function startAutoCycle() {
+    const sh = ['sphere','cube','dna','galaxy','heart'];
+    let i=0;
+    setInterval(() => {
+        if(config.isAuto) {
+            i=(i+1)%sh.length;
+            document.querySelectorAll('.dock-btn').forEach(b => {
+                b.classList.remove('active');
+                if(b.dataset.shape === sh[i]) b.classList.add('active');
+            });
+            morphTo(sh[i]);
+        }
+    }, 5000);
+}
+
+document.fonts.ready.then(init);
+</script>
+</body>
+</html>
